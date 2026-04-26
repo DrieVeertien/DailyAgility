@@ -4,51 +4,73 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.ui.overlay.OverlayPanel;
 import net.runelite.client.ui.overlay.OverlayPosition;
 import net.runelite.client.ui.overlay.components.LineComponent;
+
 import javax.inject.Inject;
+import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Graphics2D;
-import java.awt.Color;
 
 @Slf4j
-public class DailyGoalOverlay extends OverlayPanel {
+public class DailyGoalOverlay extends OverlayPanel
+{
+    // region Setup
+
     private final DailyAgility plugin;
 
     @Inject
     private ExampleConfig config;
 
     @Inject
-    public DailyGoalOverlay(DailyAgility plugin) {
+    public DailyGoalOverlay(DailyAgility plugin)
+    {
         this.plugin = plugin;
         setPosition(OverlayPosition.TOP_LEFT);
     }
 
+    // endregion
+
+    // region Render
+
     @Override
-    public Dimension render(Graphics2D graphics) {
+    public Dimension render(Graphics2D graphics)
+    {
         panelComponent.getChildren().clear();
 
-        try {
+        try
+        {
             renderLapsLeft();
             renderMarksLeft();
             renderLastLapTime();
             String course = plugin.getCurrentCourse();
             renderAvgLapTime(course);
             renderETA(course);
-        } catch (Exception e) {
+        }
+        catch (Exception e)
+        {
             log.error("DailyGoalOverlay render error", e);
         }
 
         return super.render(graphics);
     }
 
-    private void renderLapsLeft() {
+    // endregion
+
+    // region Render Helpers
+
+    private void renderLapsLeft()
+    {
+        if (!config.showLapsLeft()) return;
         int laps = plugin.getLapsLeft();
         String value;
         Color color;
 
-        if (laps < 0) {
+        if (laps < 0)
+        {
             value = "+" + Math.abs(laps);
             color = Color.GREEN;
-        } else {
+        }
+        else
+        {
             value = String.valueOf(laps);
             color = Color.WHITE;
         }
@@ -60,47 +82,20 @@ public class DailyGoalOverlay extends OverlayPanel {
                 .build());
     }
 
-    private void renderLastLapTime() {
-        if (!config.showLapTime()) return;
-        long duration = plugin.getLastLapDuration();
-        if (duration == -1) return;
-        panelComponent.getChildren().add(LineComponent.builder()
-                .left("Last lap:")
-                .right(formatSeconds(duration))
-                .build());
-    }
-
-    private void renderETA(String course)
+    private void renderMarksLeft()
     {
-        if (course == null || !config.showETA()) return;
-        long eta = plugin.getEstimatedTimeRemaining();
-        if (eta <= 0) return;
-        panelComponent.getChildren().add(LineComponent.builder()
-                .left("ETA:")
-                .right(formatSeconds(eta))
-                .build());
-    }
-
-    private void renderAvgLapTime(String course)
-    {
-        if (course == null || !config.showAverageTime()) return;
-        double avg = plugin.getAverageLapTime(course);
-        if (avg <= 0) return;
-        panelComponent.getChildren().add(LineComponent.builder()
-                .left("Avg lap:")
-                .right(formatSeconds((long) avg))
-                .build());
-    }
-
-    private void renderMarksLeft() {
+        if (!config.showMarksLeft()) return;
         int marks = plugin.getMarksLeft();
         String value;
         Color color;
 
-        if (marks < 0) {
+        if (marks < 0)
+        {
             value = "+" + Math.abs(marks);
             color = Color.GREEN;
-        } else {
+        }
+        else
+        {
             value = String.valueOf(marks);
             color = Color.WHITE;
         }
@@ -112,6 +107,46 @@ public class DailyGoalOverlay extends OverlayPanel {
                 .build());
     }
 
+    private void renderLastLapTime()
+    {
+        if (!config.showLapTime()) return;
+        long duration = plugin.getLastLapDuration();
+        if (duration == -1) return;
+
+        panelComponent.getChildren().add(LineComponent.builder()
+                .left("Last lap:")
+                .right(formatSeconds(duration))
+                .build());
+    }
+
+    private void renderAvgLapTime(String course)
+    {
+        if (course == null || !config.showAverageTime()) return;
+        double avg = plugin.getAverageLapTime(course);
+        if (avg <= 0) return;
+
+        panelComponent.getChildren().add(LineComponent.builder()
+                .left("Avg lap:")
+                .right(formatSeconds((long) avg))
+                .build());
+    }
+
+    private void renderETA(String course)
+    {
+        if (course == null || !config.showETA()) return;
+        long eta = plugin.getEstimatedTimeRemaining();
+        if (eta <= 0) return;
+
+        panelComponent.getChildren().add(LineComponent.builder()
+                .left("ETA:")
+                .right(formatSeconds(eta))
+                .build());
+    }
+
+    // endregion
+
+    // region Utilities
+
     private String formatSeconds(long ms)
     {
         long totalSeconds = ms / 1000;
@@ -122,4 +157,6 @@ public class DailyGoalOverlay extends OverlayPanel {
         if (minutes > 0) return minutes + "m " + seconds + "s";
         return seconds + "s";
     }
+
+    // endregion
 }
