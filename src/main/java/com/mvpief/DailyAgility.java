@@ -166,11 +166,6 @@ public class DailyAgility extends Plugin
 			subtractLap();
 			lapTimer.recordLap(course);
 		}
-		else
-		{
-			log.debug("MVPief: This is not the correct message!");
-			log.debug(chatMessage.getMessage());
-		}
 	}
 
 	@Subscribe
