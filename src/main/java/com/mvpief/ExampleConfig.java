@@ -32,14 +32,20 @@ public interface ExampleConfig extends Config
 	default int MarksRemaining() { return 0; }
 
 	// --- Display ---
-	@ConfigItem(keyName = "showLapTime", name = "Show Last Lap Time", description = "Show the last lap time on the overlay.", position = 0, section = displaySection)
+	@ConfigItem(keyName = "showLapsLeft", name = "Show Laps Left", description = "Show the laps left on the overlay.", position = 0, section = displaySection)
+	default boolean showLapsLeft() { return true; }
+
+	@ConfigItem(keyName = "showMarksLeft", name = "Show Marks Left", description = "Show the marks left on the overlay.", position = 1, section = displaySection)
+	default boolean showMarksLeft() { return true; }
+
+	@ConfigItem(keyName = "showLapTime", name = "Show Last Lap Time", description = "Show the last lap time on the overlay.", position = 2, section = displaySection)
 	default boolean showLapTime() { return true; }
 
-	@ConfigItem(keyName = "showETA", name = "Show ETA", description = "Show estimated time remaining on the overlay.", position = 1, section = displaySection)
-	default boolean showETA() { return true; }
-
-	@ConfigItem(keyName = "showAverageTime", name = "Show Average Time", description = "Show average lap time on the overlay.", position = 2, section = displaySection)
+	@ConfigItem(keyName = "showAverageTime", name = "Show Average Time", description = "Show average lap time on the overlay.", position = 3, section = displaySection)
 	default boolean showAverageTime() { return true; }
+
+	@ConfigItem(keyName = "showETA", name = "Show ETA", description = "Show estimated time remaining on the overlay.", position = 4, section = displaySection)
+	default boolean showETA() { return true; }
 
 	// --- Internal ---
 	@ConfigItem(keyName = "lastSavedDate", name = "", description = "", hidden = true)
