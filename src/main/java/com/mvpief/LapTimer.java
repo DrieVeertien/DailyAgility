@@ -6,18 +6,20 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 import lombok.Getter;
+import javax.inject.Inject;
+import javax.inject.Singleton;
 
+@Singleton
 public class LapTimer
 {
     private static final int MAX_LAP_HISTORY = 100;
-    private static final String CONFIG_GROUP = "dailyAgility";
 
     private final ConfigManager configManager;
 
     private long lastLapTime = -1;
-    @Getter
-    private long lastLapDuration = -1;
+    @Getter private long lastLapDuration = -1;
 
+    @Inject
     public LapTimer(ConfigManager configManager)
     {
         this.configManager = configManager;
@@ -50,7 +52,7 @@ public class LapTimer
     private List<Long> getLapHistory(String course)
     {
         String key = "lapHistory_" + course.replace(" ", "_");
-        String stored = configManager.getConfiguration(CONFIG_GROUP, key);
+        String stored = configManager.getConfiguration(DailyAgilityConfig.GROUP, key);
         if (stored == null || stored.isEmpty()) return new ArrayList<>();
         return Arrays.stream(stored.split(","))
                 .map(Long::parseLong)
@@ -67,6 +69,6 @@ public class LapTimer
         }
         String key = "lapHistory_" + course.replace(" ", "_");
         String value = history.stream().map(String::valueOf).collect(Collectors.joining(","));
-        configManager.setConfiguration(CONFIG_GROUP, key, value);
+        configManager.setConfiguration(DailyAgilityConfig.GROUP, key, value);
     }
 }

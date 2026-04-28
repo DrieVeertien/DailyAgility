@@ -5,9 +5,11 @@ import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
 import net.runelite.client.config.ConfigSection;
 
-@ConfigGroup("dailyAgility")
-public interface ExampleConfig extends Config
+@ConfigGroup(DailyAgilityConfig.GROUP)
+public interface DailyAgilityConfig extends Config
 {
+	String GROUP = "dailyAgility";
+
 	@ConfigSection(name = "Laps", description = "Lap goal and display settings", position = 0)
 	String lapsSection = "laps";
 
@@ -19,19 +21,28 @@ public interface ExampleConfig extends Config
 
 	// --- Laps ---
 	@ConfigItem(keyName = "dailyGoal", name = "Daily Lap Goal", description = "How many rooftop laps to complete today.", position = 0, section = lapsSection)
-	default int DailyGoal() { return 100; }
+	default int dailyGoal() { return 100; }
 
 	@ConfigItem(keyName = "lapsRemaining", name = "", description = "", hidden = true, section = lapsSection)
-	default int LapsRemaining() { return -1; }
+	default int lapsRemaining() { return -1; }
 
 	// --- Marks ---
 	@ConfigItem(keyName = "marksGoal", name = "Daily Marks Goal", description = "Marks of Grace to collect today.", position = 0, section = marksSection)
-	default int MarksGoal() { return 10; }
+	default int marksGoal() { return 10; }
 
 	@ConfigItem(keyName = "marksRemaining", name = "", description = "", hidden = true, section = marksSection)
-	default int MarksRemaining() { return 0; }
+	default int marksRemaining() { return 0; }
 
 	// --- Display ---
+	@ConfigItem(
+			keyName = "overlayDisplayMode",
+			name = "Overlay Mode",
+			description = "Controls which overlay panels are rendered.",
+			position = 0,
+			section = displaySection
+	)
+	default OverlayDisplayMode overlayDisplayMode() { return OverlayDisplayMode.ALWAYS; }
+
 	@ConfigItem(keyName = "showLapsLeft", name = "Show Laps Left", description = "Show the laps left on the overlay.", position = 0, section = displaySection)
 	default boolean showLapsLeft() { return true; }
 
@@ -49,5 +60,5 @@ public interface ExampleConfig extends Config
 
 	// --- Internal ---
 	@ConfigItem(keyName = "lastSavedDate", name = "", description = "", hidden = true)
-	default String LastSavedDate() { return ""; }
+	default String lastSavedDate() { return ""; }
 }
