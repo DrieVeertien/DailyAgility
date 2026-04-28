@@ -1,5 +1,7 @@
 package com.mvpief;
 
+import com.mvpief.state.SessionState;
+
 import com.google.inject.Provides;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -22,6 +24,7 @@ import javax.inject.Inject;
 import java.util.Arrays;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.time.LocalDate;
 
 @Slf4j
 @PluginDescriptor(name = "Daily Agility")
@@ -38,10 +41,12 @@ public class DailyAgility extends Plugin
 
 	@Inject private ConfigManager configManager;
 	@Inject private Client client;
-	@Inject private ExampleConfig config;
+	@Inject private DailyAgilityConfig config;
 	@Inject private OverlayManager overlayManager;
 	@Inject private DailyGoalOverlay overlay;
 	@Inject private ClientThread clientThread;
+	@Inject private LapTimer lapTimer;
+	@Inject private SessionState sessionState;
 
 	// endregion
 
@@ -50,7 +55,6 @@ public class DailyAgility extends Plugin
 	@Getter private String currentCourse = null;
 	@Getter private int lastMarkCount = 0;
 	private boolean inventoryInitialized = false;
-	private LapTimer lapTimer;
 
 	// endregion
 
@@ -59,22 +63,9 @@ public class DailyAgility extends Plugin
 	@Override
 	protected void startUp() throws Exception
 	{
-		lapTimer = new LapTimer(configManager);
-		init();
+		resetDailyProgressIfNewDay();
+		initInventory();
 		overlayManager.add(overlay);
-
-		clientThread.invokeLater(() ->
-		{
-			ItemContainer inventory = client.getItemContainer(InventoryID.INV);
-			if (inventory != null)
-			{
-				lastMarkCount = Arrays.stream(inventory.getItems())
-						.filter(item -> item.getId() == MARK_OF_GRACE_ID)
-						.mapToInt(Item::getQuantity)
-						.sum();
-				inventoryInitialized = true;
-			}
-		});
 	}
 
 	@Override
@@ -101,20 +92,21 @@ public class DailyAgility extends Plugin
 
 	public int getLapsLeft()
 	{
-		return config.LapsRemaining();
+		return config.lapsRemaining();
 	}
 
 	public int getMarksLeft()
 	{
-		return config.MarksRemaining();
+		return config.marksRemaining();
 	}
 
-	public long getEstimatedTimeRemaining()
+
+	public long getEstimatedTimeRemainingMs()
 	{
 		if (currentCourse == null) return -1;
 		double avg = getAverageLapTime(currentCourse);
 		if (avg < 0) return -1;
-		int laps = config.LapsRemaining();
+		int laps = config.lapsRemaining();
 		if (laps <= 0) return 0;
 		return (long) (avg * laps);
 	}
@@ -123,29 +115,47 @@ public class DailyAgility extends Plugin
 
 	// region Internals
 
-	private void init()
+	private void resetDailyProgressIfNewDay()
 	{
-		String today = java.time.LocalDate.now().toString();
-		String lastDate = config.LastSavedDate();
+		String today = LocalDate.now().toString();
+		String lastDate = config.lastSavedDate();
 
 		if (!today.equals(lastDate))
 		{
-			configManager.setConfiguration("dailyAgility", "lapsRemaining", config.DailyGoal());
-			configManager.setConfiguration("dailyAgility", "marksRemaining", config.MarksGoal());
-			configManager.setConfiguration("dailyAgility", "lastSavedDate", today);
+			configManager.setConfiguration(DailyAgilityConfig.GROUP, "lapsRemaining", config.dailyGoal());
+			configManager.setConfiguration(DailyAgilityConfig.GROUP, "marksRemaining", config.marksGoal());
+			configManager.setConfiguration(DailyAgilityConfig.GROUP, "lastSavedDate", today);
 		}
+	}
+
+	private void initInventory()
+	{
+		clientThread.invokeLater(() ->
+		{
+			ItemContainer inventory = client.getItemContainer(InventoryID.INV);
+			if (inventory == null)
+			{
+				return;
+			}
+
+			lastMarkCount = Arrays.stream(inventory.getItems())
+					.filter(item -> item.getId() == MARK_OF_GRACE_ID)
+					.mapToInt(Item::getQuantity)
+					.sum();
+			inventoryInitialized = true;
+		});
 	}
 
 	private void subtractLap()
 	{
-		int newLapCount = config.LapsRemaining() - 1;
-		configManager.setConfiguration("dailyAgility", "lapsRemaining", newLapCount);
+		int newLapCount = config.lapsRemaining() - 1;
+		configManager.setConfiguration(DailyAgilityConfig.GROUP, "lapsRemaining", newLapCount);
 	}
 
 	private void markPickUp(int count)
 	{
-		int newCount = Math.max(0, config.MarksRemaining() - count);
-		configManager.setConfiguration("dailyAgility", "marksRemaining", newCount);
+		int newCount = Math.max(0, config.marksRemaining() - count);
+		configManager.setConfiguration(DailyAgilityConfig.GROUP, "marksRemaining", newCount);
 	}
 
 	// endregion
@@ -165,21 +175,24 @@ public class DailyAgility extends Plugin
 			currentCourse = course;
 			subtractLap();
 			lapTimer.recordLap(course);
+			sessionState.setCurrentCourse(matcher.group(1));
 		}
 	}
 
 	@Subscribe
 	public void onConfigChanged(ConfigChanged event)
 	{
-		if (!event.getGroup().equals("dailyAgility")) return;
+		if (!event.getGroup().equals(DailyAgilityConfig.GROUP)) return;
 
+		// TODO: make a button to set the current lapsRemaining to the current goal & make it increase by delta.
+		// For now the lap counter just resets to the new dailGoal when changed.
 		if (event.getKey().equals("dailyGoal"))
 		{
-			configManager.setConfiguration("dailyAgility", "lapsRemaining", config.DailyGoal());
+			configManager.setConfiguration(DailyAgilityConfig.GROUP, "lapsRemaining", config.dailyGoal());
 		}
 		if (event.getKey().equals("marksGoal"))
 		{
-			configManager.setConfiguration("dailyAgility", "marksRemaining", config.MarksGoal());
+			configManager.setConfiguration(DailyAgilityConfig.GROUP, "marksRemaining", config.marksGoal());
 		}
 	}
 
@@ -215,9 +228,9 @@ public class DailyAgility extends Plugin
 	// region Config
 
 	@Provides
-	ExampleConfig provideConfig(ConfigManager configManager)
+	DailyAgilityConfig provideConfig(ConfigManager configManager)
 	{
-		return configManager.getConfig(ExampleConfig.class);
+		return configManager.getConfig(DailyAgilityConfig.class);
 	}
 
 	// endregion

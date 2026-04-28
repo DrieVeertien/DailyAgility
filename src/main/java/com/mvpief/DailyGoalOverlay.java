@@ -1,4 +1,5 @@
 package com.mvpief;
+import com.mvpief.state.SessionState;
 
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.ui.overlay.OverlayPanel;
@@ -18,7 +19,8 @@ public class DailyGoalOverlay extends OverlayPanel
     private final DailyAgility plugin;
 
     @Inject
-    private ExampleConfig config;
+    private DailyAgilityConfig config;
+    @Inject private SessionState sessionState;
 
     @Inject
     public DailyGoalOverlay(DailyAgility plugin)
@@ -35,6 +37,7 @@ public class DailyGoalOverlay extends OverlayPanel
     public Dimension render(Graphics2D graphics)
     {
         panelComponent.getChildren().clear();
+        if (!shouldRender()) return super.render(graphics);
 
         try
         {
@@ -134,13 +137,30 @@ public class DailyGoalOverlay extends OverlayPanel
     private void renderETA(String course)
     {
         if (course == null || !config.showETA()) return;
-        long eta = plugin.getEstimatedTimeRemaining();
+        long eta = plugin.getEstimatedTimeRemainingMs();
         if (eta <= 0) return;
 
         panelComponent.getChildren().add(LineComponent.builder()
                 .left("ETA:")
                 .right(formatSeconds(eta))
                 .build());
+    }
+
+    private boolean shouldRender()
+    {
+        OverlayDisplayMode mode = config.overlayDisplayMode();
+
+        switch (mode) {
+            case ALWAYS:
+                return true;
+            case ON_GOAL:
+                return !sessionState.isGoalAchieved();
+            case ON_RUNNING:
+                return sessionState.isRunning();
+            case NEVER:
+                return false;
+        }
+        return false;
     }
 
     // endregion
