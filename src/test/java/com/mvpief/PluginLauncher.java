@@ -7,7 +7,8 @@ public class PluginLauncher
 {
 	public static void main(String[] args) throws Exception
 	{
-		ExternalPluginManager.loadBuiltin(DailyAgility.class);
+        //noinspection unchecked
+        ExternalPluginManager.loadBuiltin(DailyAgility.class);
 		RuneLite.main(args);
 	}
 }

@@ -161,6 +161,7 @@ public class DailyGoalOverlay extends OverlayPanel
                 return false;
         }
         return false;
+
     }
 
     // endregion
@@ -176,6 +177,7 @@ public class DailyGoalOverlay extends OverlayPanel
         if (hours > 0) return hours + "h " + minutes + "m " + seconds + "s";
         if (minutes > 0) return minutes + "m " + seconds + "s";
         return seconds + "s";
+
     }
 
     // endregion
