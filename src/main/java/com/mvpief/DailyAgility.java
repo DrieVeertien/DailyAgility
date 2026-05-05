@@ -64,8 +64,7 @@ public class DailyAgility extends Plugin
 	@Getter private String currentCourse = null;
 	@Getter private int lastMarkCount = 0;
 	private boolean inventoryInitialized = false;
-	private NavigationButton navButton;
-	private boolean suppressedMarkPickups = false;
+    private boolean suppressedMarkPickups = false;
 
 	// endregion
 
@@ -165,12 +164,13 @@ public class DailyAgility extends Plugin
 		final BufferedImage rawIcon = ImageUtil.loadImageResource(getClass(), "markofgrace.png");
 		final BufferedImage icon = ImageUtil.resizeImage(rawIcon, 16, 16);
 
-		navButton = NavigationButton.builder()
-				.tooltip("Daily Agility")
-				.icon(icon)
-				.priority(6)           // lower = further left in the sidebar
-				.panel(panel)
-				.build();
+        // lower = further left in the sidebar
+        NavigationButton navButton = NavigationButton.builder()
+                .tooltip("Daily Agility")
+                .icon(icon)
+                .priority(6)           // lower = further left in the sidebar
+                .panel(panel)
+                .build();
 
 		clientToolbar.addNavigation(navButton);
 		panel.setOnDateSelected(date -> panel.setLogEntries(logStore.getEntries(null, date)));

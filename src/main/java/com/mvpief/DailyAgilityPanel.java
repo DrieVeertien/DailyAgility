@@ -1,5 +1,6 @@
 package com.mvpief;
 
+import lombok.Setter;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
@@ -45,6 +46,7 @@ public class DailyAgilityPanel extends PluginPanel
     private LocalDate         selectedDate   = null;   // null = all dates
     private Set<LocalDate>    datesWithData  = new HashSet<>();
 
+    @Setter
     private Consumer<LocalDate> onDateSelected = date -> {};
 
     // endregion
@@ -74,11 +76,6 @@ public class DailyAgilityPanel extends PluginPanel
     // endregion
 
     // region Public API
-
-    public void setOnDateSelected(Consumer<LocalDate> listener)
-    {
-        this.onDateSelected = listener;
-    }
 
     /**
      * Tell the calendar which dates have log data so it can highlight them.
