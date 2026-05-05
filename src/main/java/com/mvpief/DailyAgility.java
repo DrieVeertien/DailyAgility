@@ -18,10 +18,16 @@ import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
+import net.runelite.client.ui.ClientToolbar;
+import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.ui.overlay.OverlayManager;
+import net.runelite.client.util.ImageUtil;
+import net.runelite.api.events.MenuOptionClicked;
 
 import javax.inject.Inject;
+import java.awt.image.BufferedImage;
 import java.util.Arrays;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.time.LocalDate;
@@ -47,6 +53,9 @@ public class DailyAgility extends Plugin
 	@Inject private ClientThread clientThread;
 	@Inject private LapTimer lapTimer;
 	@Inject private SessionState sessionState;
+	@Inject private ClientToolbar clientToolbar;
+	@Inject private DailyAgilityPanel panel;
+	@Inject private LogStore logStore;
 
 	// endregion
 
@@ -55,6 +64,7 @@ public class DailyAgility extends Plugin
 	@Getter private String currentCourse = null;
 	@Getter private int lastMarkCount = 0;
 	private boolean inventoryInitialized = false;
+    private boolean suppressedMarkPickups = false;
 
 	// endregion
 
@@ -64,7 +74,9 @@ public class DailyAgility extends Plugin
 	protected void startUp() throws Exception
 	{
 		resetDailyProgressIfNewDay();
+		restoreLastKnownCourse();
 		initInventory();
+		initPanel();
 		overlayManager.add(overlay);
 	}
 
@@ -135,7 +147,7 @@ public class DailyAgility extends Plugin
 			ItemContainer inventory = client.getItemContainer(InventoryID.INV);
 			if (inventory == null)
 			{
-				return;
+				return false; // retry next tick
 			}
 
 			lastMarkCount = Arrays.stream(inventory.getItems())
@@ -143,24 +155,83 @@ public class DailyAgility extends Plugin
 					.mapToInt(Item::getQuantity)
 					.sum();
 			inventoryInitialized = true;
+			return true; // done
 		});
+	}
+
+	private void initPanel()
+	{
+		final BufferedImage rawIcon = ImageUtil.loadImageResource(getClass(), "markofgrace.png");
+		final BufferedImage icon = ImageUtil.resizeImage(rawIcon, 16, 16);
+
+        // lower = further left in the sidebar
+        NavigationButton navButton = NavigationButton.builder()
+                .tooltip("Daily Agility")
+                .icon(icon)
+                .priority(6)           // lower = further left in the sidebar
+                .panel(panel)
+                .build();
+
+		clientToolbar.addNavigation(navButton);
+		panel.setOnDateSelected(date -> panel.setLogEntries(logStore.getEntries(null, date)));
+
+		refreshPanel();
+		refreshCalendarHighlights();
+	}
+
+	private void refreshPanel()
+	{
+		panel.setLogEntries(logStore.getEntries(null));
+	}
+
+	private void refreshCalendarHighlights()
+	{
+		Set<LocalDate> dates = logStore.getKnownDates().stream()
+				.map(LocalDate::parse)
+				.collect(java.util.stream.Collectors.toSet());
+		panel.setDatesWithData(dates);
 	}
 
 	private void subtractLap()
 	{
 		int newLapCount = config.lapsRemaining() - 1;
 		configManager.setConfiguration(DailyAgilityConfig.GROUP, "lapsRemaining", newLapCount);
+		if (currentCourse != null) logStore.recordLap(currentCourse);
+		refreshPanel();
+		refreshCalendarHighlights();
 	}
 
 	private void markPickUp(int count)
 	{
-		int newCount = Math.max(0, config.marksRemaining() - count);
+		int newCount = config.marksRemaining() - count;
 		configManager.setConfiguration(DailyAgilityConfig.GROUP, "marksRemaining", newCount);
+		if (currentCourse != null) logStore.recordMarks(currentCourse, count);
+		refreshPanel();
+	}
+
+	private void restoreLastKnownCourse()
+	{
+		String saved = config.lastKnownCourse();
+		if (saved != null && !saved.isEmpty())
+		{
+			currentCourse = saved;
+			sessionState.setCurrentCourse(saved);
+		}
 	}
 
 	// endregion
 
 	// region Events
+
+	@Subscribe
+	public void onMenuOptionClicked(net.runelite.api.events.MenuOptionClicked event)
+	{
+		if (event.getItemId() == MARK_OF_GRACE_ID
+				&& event.getMenuOption().equalsIgnoreCase("Drop"))
+		{
+			suppressedMarkPickups = true;
+		}
+	}
 
 	@Subscribe
 	public void onChatMessage(ChatMessage chatMessage)
@@ -173,9 +244,10 @@ public class DailyAgility extends Plugin
 		{
 			String course = matcher.group(1);
 			currentCourse = course;
+			configManager.setConfiguration(DailyAgilityConfig.GROUP, "lastKnownCourse", course);
 			subtractLap();
 			lapTimer.recordLap(course);
-			sessionState.setCurrentCourse(matcher.group(1));
+			sessionState.setCurrentCourse(course);
 		}
 	}
 
@@ -216,8 +288,15 @@ public class DailyAgility extends Plugin
 
 		if (currentCount > lastMarkCount)
 		{
-			int picked = currentCount - lastMarkCount;
-			markPickUp(picked);
+			if (suppressedMarkPickups)
+			{
+				suppressedMarkPickups = false;
+			}
+			else
+			{
+				int picked = currentCount - lastMarkCount;
+				markPickUp(picked);
+			}
 		}
 
 		lastMarkCount = currentCount;

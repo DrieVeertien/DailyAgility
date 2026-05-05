@@ -19,6 +19,9 @@ public interface DailyAgilityConfig extends Config
 	@ConfigSection(name = "Display", description = "Overlay display options", position = 2)
 	String displaySection = "display";
 
+	@ConfigSection(name = "Logging", description = "Logging options", position = 3)
+	String loggingSection = "logging";
+
 	// --- Laps ---
 	@ConfigItem(keyName = "dailyGoal", name = "Daily Lap Goal", description = "How many rooftop laps to complete today.", position = 0, section = lapsSection)
 	default int dailyGoal() { return 100; }
@@ -58,7 +61,13 @@ public interface DailyAgilityConfig extends Config
 	@ConfigItem(keyName = "showETA", name = "Show ETA", description = "Show estimated time remaining on the overlay.", position = 4, section = displaySection)
 	default boolean showETA() { return true; }
 
+	@ConfigItem(keyName = "logEntries", name = "Log daily laps", description = "Logs the daily laps and mark of grace.", position = 0, section = loggingSection)
+	default boolean logEntries() { return true; }
+
 	// --- Internal ---
 	@ConfigItem(keyName = "lastSavedDate", name = "", description = "", hidden = true)
 	default String lastSavedDate() { return ""; }
+
+	@ConfigItem(keyName = "lastKnownCourse", name = "", description = "", hidden = true)
+	default String lastKnownCourse() { return ""; }
 }
