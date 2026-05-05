@@ -22,6 +22,7 @@ import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.util.ImageUtil;
+import net.runelite.api.events.MenuOptionClicked;
 
 import javax.inject.Inject;
 import java.awt.image.BufferedImage;
@@ -64,6 +65,7 @@ public class DailyAgility extends Plugin
 	@Getter private int lastMarkCount = 0;
 	private boolean inventoryInitialized = false;
 	private NavigationButton navButton;
+	private boolean suppressedMarkPickups = false;
 
 	// endregion
 
@@ -73,6 +75,7 @@ public class DailyAgility extends Plugin
 	protected void startUp() throws Exception
 	{
 		resetDailyProgressIfNewDay();
+		restoreLastKnownCourse();
 		initInventory();
 		initPanel();
 		overlayManager.add(overlay);
@@ -145,7 +148,7 @@ public class DailyAgility extends Plugin
 			ItemContainer inventory = client.getItemContainer(InventoryID.INV);
 			if (inventory == null)
 			{
-				return;
+				return false; // retry next tick
 			}
 
 			lastMarkCount = Arrays.stream(inventory.getItems())
@@ -153,6 +156,7 @@ public class DailyAgility extends Plugin
 					.mapToInt(Item::getQuantity)
 					.sum();
 			inventoryInitialized = true;
+			return true; // done
 		});
 	}
 
@@ -205,9 +209,29 @@ public class DailyAgility extends Plugin
 		refreshPanel();
 	}
 
+	private void restoreLastKnownCourse()
+	{
+		String saved = config.lastKnownCourse();
+		if (saved != null && !saved.isEmpty())
+		{
+			currentCourse = saved;
+			sessionState.setCurrentCourse(saved);
+		}
+	}
+
 	// endregion
 
 	// region Events
+
+	@Subscribe
+	public void onMenuOptionClicked(net.runelite.api.events.MenuOptionClicked event)
+	{
+		if (event.getItemId() == MARK_OF_GRACE_ID
+				&& event.getMenuOption().equalsIgnoreCase("Drop"))
+		{
+			suppressedMarkPickups = true;
+		}
+	}
 
 	@Subscribe
 	public void onChatMessage(ChatMessage chatMessage)
@@ -220,9 +244,10 @@ public class DailyAgility extends Plugin
 		{
 			String course = matcher.group(1);
 			currentCourse = course;
+			configManager.setConfiguration(DailyAgilityConfig.GROUP, "lastKnownCourse", course);
 			subtractLap();
 			lapTimer.recordLap(course);
-			sessionState.setCurrentCourse(matcher.group(1));
+			sessionState.setCurrentCourse(course);
 		}
 	}
 
@@ -263,8 +288,15 @@ public class DailyAgility extends Plugin
 
 		if (currentCount > lastMarkCount)
 		{
-			int picked = currentCount - lastMarkCount;
-			markPickUp(picked);
+			if (suppressedMarkPickups)
+			{
+				suppressedMarkPickups = false;
+			}
+			else
+			{
+				int picked = currentCount - lastMarkCount;
+				markPickUp(picked);
+			}
 		}
 
 		lastMarkCount = currentCount;

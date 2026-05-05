@@ -67,4 +67,7 @@ public interface DailyAgilityConfig extends Config
 	// --- Internal ---
 	@ConfigItem(keyName = "lastSavedDate", name = "", description = "", hidden = true)
 	default String lastSavedDate() { return ""; }
+
+	@ConfigItem(keyName = "lastKnownCourse", name = "", description = "", hidden = true)
+	default String lastKnownCourse() { return ""; }
 }
