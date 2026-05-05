@@ -161,7 +161,7 @@ public class DailyAgility extends Plugin
 
 	private void initPanel()
 	{
-		final BufferedImage rawIcon = ImageUtil.loadImageResource(getClass(), "markofgrace.png");
+		final BufferedImage rawIcon = ImageUtil.loadImageResource(getClass(), "panel_logo.png");
 		final BufferedImage icon = ImageUtil.resizeImage(rawIcon, 16, 16);
 
         // lower = further left in the sidebar
