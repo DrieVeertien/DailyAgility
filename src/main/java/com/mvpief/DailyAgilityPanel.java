@@ -1,5 +1,6 @@
 package com.mvpief;
 
+import lombok.Getter;
 import lombok.Setter;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
@@ -43,11 +44,17 @@ public class DailyAgilityPanel extends PluginPanel
     private final JLabel      monthYearLabel = new JLabel();
 
     private YearMonth         viewMonth      = YearMonth.now();
+
+    /** The currently selected calendar date, or {@code null} when "all dates" is showing. */
+    @Getter
     private LocalDate         selectedDate   = null;   // null = all dates
     private Set<LocalDate>    datesWithData  = new HashSet<>();
 
     @Setter
     private Consumer<LocalDate> onDateSelected = date -> {};
+
+    @Setter
+    private Runnable onExport = () -> {};
 
     // endregion
 
@@ -149,10 +156,14 @@ public class DailyAgilityPanel extends PluginPanel
         north.add(calendarCard);
         north.add(Box.createVerticalStrut(4));
 
-        // "Show all" button beneath the calendar
-        JButton allButton = buildAllButton();
-        allButton.setAlignmentX(Component.LEFT_ALIGNMENT);
-        north.add(allButton);
+        // "Show all" + "Export" buttons beneath the calendar, side by side
+        JPanel buttonRow = new JPanel(new GridLayout(1, 2, 4, 0));
+        buttonRow.setBackground(COLOR_BG);
+        buttonRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+        buttonRow.setMaximumSize(new Dimension(Integer.MAX_VALUE, 28));
+        buttonRow.add(buildAllButton());
+        buttonRow.add(buildExportButton());
+        north.add(buttonRow);
 
         north.add(Box.createVerticalStrut(6));
 
@@ -299,7 +310,7 @@ public class DailyAgilityPanel extends PluginPanel
         }
         else if (isToday)
         {
-            cell.setBackground(COLOR_CARD);
+            cell.setBackground(hasData ? COLOR_HAS_DATA : COLOR_CARD);
             cell.setBorder(new LineBorder(COLOR_TODAY_BORDER, 1));
         }
         else if (hasData)
@@ -382,6 +393,20 @@ public class DailyAgilityPanel extends PluginPanel
             rebuildCalendarGrid();
             onDateSelected.accept(null);
         });
+        return btn;
+    }
+
+    private JButton buildExportButton()
+    {
+        JButton btn = new JButton("Export");
+        btn.setFont(FontManager.getRunescapeSmallFont());
+        btn.setForeground(COLOR_TEXT);
+        btn.setBackground(ColorScheme.MEDIUM_GRAY_COLOR);
+        btn.setBorder(new EmptyBorder(4, 8, 4, 8));
+        btn.setFocusPainted(false);
+        btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        btn.setMaximumSize(new Dimension(Integer.MAX_VALUE, 28));
+        btn.addActionListener(e -> onExport.run());
         return btn;
     }
 

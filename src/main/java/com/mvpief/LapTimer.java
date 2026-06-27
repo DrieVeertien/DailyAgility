@@ -14,6 +14,8 @@ public class LapTimer
 {
     private static final int MAX_LAP_HISTORY = 100;
 
+    private static final long MAX_LAP_DURATION_MS = 5 * 60 * 1000; // 10 minutes
+
     private final ConfigManager configManager;
 
     private long lastLapTime = -1;
@@ -30,8 +32,13 @@ public class LapTimer
         long now = System.currentTimeMillis();
         if (lastLapTime != -1)
         {
-            lastLapDuration = now - lastLapTime;
-            saveLapTime(course, lastLapDuration);
+            long duration = now - lastLapTime;
+            if (duration <= MAX_LAP_DURATION_MS)
+            {
+                lastLapDuration = duration;
+                saveLapTime(course, lastLapDuration);
+            }
+            // else: gap too large (AFK/logged out) — skip timing, just re-baseline below.
         }
         lastLapTime = now;
     }
