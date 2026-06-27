@@ -1,15 +1,18 @@
 package com.mvpief;
 
 import com.mvpief.state.SessionState;
+import com.mvpief.export.CsvExporter;
 
 import com.google.inject.Provides;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
+import net.runelite.api.GameState;
 import net.runelite.api.Item;
 import net.runelite.api.ItemContainer;
 import net.runelite.api.events.ChatMessage;
+import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.gameval.InventoryID;
 import net.runelite.client.callback.ClientThread;
@@ -25,8 +28,13 @@ import net.runelite.client.util.ImageUtil;
 import net.runelite.api.events.MenuOptionClicked;
 
 import javax.inject.Inject;
+import javax.swing.JFileChooser;
+import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.image.BufferedImage;
+import java.io.File;
+import java.io.IOException;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -56,6 +64,7 @@ public class DailyAgility extends Plugin
 	@Inject private ClientToolbar clientToolbar;
 	@Inject private DailyAgilityPanel panel;
 	@Inject private LogStore logStore;
+	@Inject private CsvExporter csvExporter;
 
 	// endregion
 
@@ -174,14 +183,58 @@ public class DailyAgility extends Plugin
 
 		clientToolbar.addNavigation(navButton);
 		panel.setOnDateSelected(date -> panel.setLogEntries(logStore.getEntries(null, date)));
+		panel.setOnExport(this::exportLog);
 
 		refreshPanel();
 		refreshCalendarHighlights();
 	}
 
+	private void exportLog()
+	{
+		// Runs on the Swing EDT (button click); the file chooser must stay here.
+		JFileChooser chooser = new JFileChooser();
+		chooser.setDialogTitle("Export Daily Agility Log");
+		chooser.setSelectedFile(new File("daily-agility-" + LocalDate.now() + ".csv"));
+		chooser.setFileFilter(new FileNameExtensionFilter("CSV files (*.csv)", "csv"));
+
+		if (chooser.showSaveDialog(panel) != JFileChooser.APPROVE_OPTION) return;
+
+		File chosen = chooser.getSelectedFile();
+		final File target = chosen.getName().toLowerCase().endsWith(".csv")
+				? chosen
+				: new File(chosen.getParentFile(), chosen.getName() + ".csv");
+
+		// Gather rows + write off the EDT so a large log never freezes the client.
+		new Thread(() ->
+		{
+			try
+			{
+				List<LogEntry> entries = logStore.getEntries(null);
+				csvExporter.export(target, entries);
+				log.info("Exported {} Daily Agility log entries to {}", entries.size(), target);
+			}
+			catch (IOException e)
+			{
+				log.error("Failed to export Daily Agility log to {}", target, e);
+			}
+		}, "DailyAgility-CSV-Export").start();
+	}
+
 	private void refreshPanel()
 	{
-		panel.setLogEntries(logStore.getEntries(null));
+		LocalDate selected = panel.getSelectedDate();
+
+		// Laps/marks always log to today, so a new lap only changes views that include today.
+		// Re-query when showing all dates (null) or today's filter; leave a past-date view
+		// untouched so the selected filter doesn't snap back to "all dates".
+		if (selected == null)
+		{
+			panel.setLogEntries(logStore.getEntries(null));
+		}
+		else if (selected.equals(LocalDate.now()))
+		{
+			panel.setLogEntries(logStore.getEntries(null, selected));
+		}
 	}
 
 	private void refreshCalendarHighlights()
@@ -234,6 +287,17 @@ public class DailyAgility extends Plugin
 	}
 
 	@Subscribe
+	public void onGameStateChanged(GameStateChanged event)
+	{
+		// startUp() only fires when the plugin loads, not on login — so re-check the day
+		// whenever the player logs in, to handle the client being left running overnight.
+		if (event.getGameState() == GameState.LOGGED_IN)
+		{
+			resetDailyProgressIfNewDay();
+		}
+	}
+
+	@Subscribe
 	public void onChatMessage(ChatMessage chatMessage)
 	{
 		if (chatMessage.getType() != ChatMessageType.GAMEMESSAGE) return;
@@ -242,12 +306,16 @@ public class DailyAgility extends Plugin
 		Matcher matcher = LAP_PATTERN.matcher(clean);
 		if (matcher.find())
 		{
+			// Also covers staying logged in across midnight.
+			resetDailyProgressIfNewDay();
+
 			String course = matcher.group(1);
 			currentCourse = course;
 			configManager.setConfiguration(DailyAgilityConfig.GROUP, "lastKnownCourse", course);
 			subtractLap();
 			lapTimer.recordLap(course);
 			sessionState.setCurrentCourse(course);
+			sessionState.markActivity();
 		}
 	}
 
