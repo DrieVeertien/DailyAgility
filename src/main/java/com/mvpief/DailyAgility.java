@@ -13,6 +13,7 @@ import net.runelite.api.Item;
 import net.runelite.api.ItemContainer;
 import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameStateChanged;
+import net.runelite.api.events.GameTick;
 import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.gameval.InventoryID;
 import net.runelite.client.callback.ClientThread;
@@ -72,8 +73,11 @@ public class DailyAgility extends Plugin
 
 	@Getter private String currentCourse = null;
 	@Getter private int lastMarkCount = 0;
+	private int lastBankMarkCount = -1; // -1 = bank not yet seen this session
 	private boolean inventoryInitialized = false;
-    private boolean suppressedMarkPickups = false;
+	private boolean droppedMarkPending = false;
+	private int pendingMarkPickup = 0;
+	private int pendingBankWithdrawal = 0;
 
 	// endregion
 
@@ -282,7 +286,7 @@ public class DailyAgility extends Plugin
 		if (event.getItemId() == MARK_OF_GRACE_ID
 				&& event.getMenuOption().equalsIgnoreCase("Drop"))
 		{
-			suppressedMarkPickups = true;
+			droppedMarkPending = true;
 		}
 	}
 
@@ -294,6 +298,14 @@ public class DailyAgility extends Plugin
 		if (event.getGameState() == GameState.LOGGED_IN)
 		{
 			resetDailyProgressIfNewDay();
+			// Re-baseline on every login/world-hop so marks already in the
+			// inventory are never counted as newly collected.
+			inventoryInitialized = false;
+			lastBankMarkCount = -1;
+			droppedMarkPending = false;
+			pendingMarkPickup = 0;
+			pendingBankWithdrawal = 0;
+			initInventory();
 		}
 	}
 
@@ -337,15 +349,39 @@ public class DailyAgility extends Plugin
 	}
 
 	@Subscribe
+	public void onGameTick(GameTick tick)
+	{
+		// Inventory and bank container events both fire within the same tick.
+		// Subtract any bank withdrawal from the inventory gain so that only
+		// marks actually picked up from the ground are counted.
+		int net = pendingMarkPickup - pendingBankWithdrawal;
+		if (net > 0)
+		{
+			markPickUp(net);
+		}
+		pendingMarkPickup = 0;
+		pendingBankWithdrawal = 0;
+	}
+
+	@Subscribe
 	public void onItemContainerChanged(ItemContainerChanged event)
 	{
-		if (event.getContainerId() != InventoryID.INV) return;
+		int containerId = event.getContainerId();
 
-		ItemContainer inventory = event.getItemContainer();
-		int currentCount = Arrays.stream(inventory.getItems())
-				.filter(item -> item.getId() == MARK_OF_GRACE_ID)
-				.mapToInt(Item::getQuantity)
-				.sum();
+		if (containerId == InventoryID.BANK)
+		{
+			int currentBankCount = countMarks(event.getItemContainer());
+			if (lastBankMarkCount >= 0 && currentBankCount < lastBankMarkCount)
+			{
+				pendingBankWithdrawal += lastBankMarkCount - currentBankCount;
+			}
+			lastBankMarkCount = currentBankCount;
+			return;
+		}
+
+		if (containerId != InventoryID.INV) return;
+
+		int currentCount = countMarks(event.getItemContainer());
 
 		if (!inventoryInitialized)
 		{
@@ -354,20 +390,29 @@ public class DailyAgility extends Plugin
 			return;
 		}
 
+		if (droppedMarkPending && currentCount < lastMarkCount)
+		{
+			// The intentional drop landed — freeze lastMarkCount at the pre-drop value
+			// so picking the same mark back up shows a zero net delta.
+			droppedMarkPending = false;
+			return;
+		}
+		droppedMarkPending = false;
+
 		if (currentCount > lastMarkCount)
 		{
-			if (suppressedMarkPickups)
-			{
-				suppressedMarkPickups = false;
-			}
-			else
-			{
-				int picked = currentCount - lastMarkCount;
-				markPickUp(picked);
-			}
+			pendingMarkPickup += currentCount - lastMarkCount;
 		}
 
 		lastMarkCount = currentCount;
+	}
+
+	private int countMarks(ItemContainer container)
+	{
+		return Arrays.stream(container.getItems())
+				.filter(item -> item.getId() == MARK_OF_GRACE_ID)
+				.mapToInt(Item::getQuantity)
+				.sum();
 	}
 
 	// endregion
